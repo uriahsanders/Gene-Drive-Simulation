@@ -5,22 +5,20 @@ import pygame
 pygame.init()
 screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
 SCREEN_WIDTH, SCREEN_HEIGHT = pygame.display.get_surface().get_size()
-BUG_SIZE = 10
+BUG_SIZE = 18
 # RULES (might modify at the individual level if the data supports this)
 multiple_matings = 0 # Can individuals mate more than once?
 num_offspring = 2 # How many offspring are created after every mating?
 cross_generational_mating = False # Can individuals mate with members of previous generations
-generation_time = 5 # in seconds
 CRISPR_efficiency = 0.95 # in percent (almost always works)
 max_generation_life_span = 1 # how many generations can pass before an individual dies
 types = ['heterozygous', 'homozygous_wt', 'homozygous_modified']
-num_generations = 3
-total_population = 0
+num_generations = 6
 
 # For input boxes
 COLOR_INACTIVE = pygame.Color('lightskyblue3')
 COLOR_ACTIVE = pygame.Color('dodgerblue2')
-FONT = pygame.font.Font(None, 32)
+FONT = pygame.font.Font(None, 28)
 
 bug_wt = pygame.image.load('wt2.png').convert_alpha()
 bug_wt = pygame.transform.smoothscale(bug_wt, (BUG_SIZE, BUG_SIZE))
@@ -44,6 +42,7 @@ class InputBox:
             if self.rect.collidepoint(event.pos):
                 # Toggle the active variable.
                 self.active = not self.active
+                self.text = ''
             else:
                 self.active = False
             # Change the current color of the input box.
@@ -256,8 +255,8 @@ def main(wild_type_pop_size=None, modified_pop_size=None):
 def simulation():
     clock = pygame.time.Clock()
     done = False
-    wt_population_input = InputBox(30, 30, 200, 30)
-    mod_population_input = InputBox(30, 75, 200, 30)
+    wt_population_input = InputBox(30, 30, 200, 30, 'Num WT')
+    mod_population_input = InputBox(30, 75, 200, 30, 'Num Mod')
     while not done:
         screen.fill((255, 255, 255))
         # Simulation info
@@ -298,8 +297,12 @@ def simulation():
         if population is not None:
             population.draw_bugs()
         generation = font.render("Generation: {}".format(generation_num), True, (0, 0, 0))
-        num_wt = font.render("Wild-Type (red): {}%".format(int(wt_num/pop_num*100)), True, (0, 0, 0))
-        num_mod = font.render("Modified (green): {}%".format(int(mod_num/pop_num*100)), True, (0, 0, 0))
+        percent_wt = int(round(wt_num/pop_num*100))
+        percent_mod = int(round(mod_num/pop_num*100))
+        if percent_mod < 1 and pop_num > 1:
+            percent_mod = '< 1'
+        num_wt = font.render("Wild-Type (red): {}%".format(percent_wt), True, (0, 0, 0))
+        num_mod = font.render("Modified (green): {}%".format(percent_mod), True, (0, 0, 0))
         # Start button text
         button = font.render("Start", True, (0, 0, 0))
         # Render everything
