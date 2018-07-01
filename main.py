@@ -10,15 +10,14 @@ BUG_SIZE = 10
 multiple_matings = 0 # Can individuals mate more than once?
 num_offspring = 2 # How many offspring are created after every mating?
 cross_generational_mating = False # Can individuals mate with members of previous generations
-life_span = 1 # in generations
 generation_time = 5 # in seconds
 CRISPR_efficiency = 0.95 # in percent (almost always works)
 max_generation_life_span = 1 # how many generations can pass before an individual dies
 types = ['heterozygous', 'homozygous_wt', 'homozygous_modified']
-num_generations = 6
+num_generations = 3
 total_population = 0
 
-# Input box class, with help from https://stackoverflow.com/questions/46390231/how-to-create-a-text-input-box-with-pygame#
+# For input boxes
 COLOR_INACTIVE = pygame.Color('lightskyblue3')
 COLOR_ACTIVE = pygame.Color('dodgerblue2')
 FONT = pygame.font.Font(None, 32)
@@ -124,7 +123,7 @@ class Population:
         for individual in self.individuals:
             # Don't draw dead bugs!
             if individual.dead == True:
-                continue
+                return
             if individual.bug['_type'] == 'wt':
                 bug = bug_wt
             else:
@@ -211,7 +210,7 @@ class Individual:
                 if self.is_homozygous_wt():
                     percent_modified = self.population.homozygous_modified / len(self.population.individuals)
                     rand = randint(0, 100)
-                    if rand < percent_modified:
+                    if rand < int(percent_modified*100):
                         child.make_homozygous_modified()
                     else:
                         child.make_homozygous_wt()
@@ -238,7 +237,6 @@ def main(wild_type_pop_size=None, modified_pop_size=None):
     if wild_type_pop_size is None:
         wild_type_pop_size = int(input("Enter size of the initial population: "))
         modified_pop_size = int(input("Enter size of the modified population you want to introduce: "))
-    life_span = 0
     # Develop parameters for modified population
     modified_population = Population(modified_pop_size, 2) # all homozygous_modified
     # Develop parameters for initial wild-type population
@@ -301,7 +299,7 @@ def simulation():
             population.draw_bugs()
         generation = font.render("Generation: {}".format(generation_num), True, (0, 0, 0))
         num_wt = font.render("Wild-Type (red): {}%".format(int(wt_num/pop_num*100)), True, (0, 0, 0))
-        num_mod = font.render("Modified (blue): {}%".format(int(mod_num/pop_num*100)), True, (0, 0, 0))
+        num_mod = font.render("Modified (green): {}%".format(int(mod_num/pop_num*100)), True, (0, 0, 0))
         # Start button text
         button = font.render("Start", True, (0, 0, 0))
         # Render everything
