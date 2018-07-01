@@ -13,7 +13,7 @@ generation_time = 5 # in seconds
 CRISPR_efficiency = 5 # in percent
 max_generation_life_span = 1 # how many generations can pass before an individual dies
 types = ['heterozygous', 'homozygous_wt', 'homozygous_modified']
-num_generations = 6
+num_generations = 3
 total_population = 0
 
 # Input box class, with help from https://stackoverflow.com/questions/46390231/how-to-create-a-text-input-box-with-pygame#
@@ -21,6 +21,12 @@ COLOR_INACTIVE = pygame.Color('lightskyblue3')
 COLOR_ACTIVE = pygame.Color('dodgerblue2')
 FONT = pygame.font.Font(None, 32)
 
+bug_wt = pygame.image.load('wt2.png').convert_alpha()
+bug_wt = pygame.transform.smoothscale(bug_wt, (5, 5))
+bug_wt = pygame.transform.rotozoom(bug_wt, 90, 1)
+bug_mod = pygame.image.load('mod2.png').convert_alpha()
+bug_mod = pygame.transform.smoothscale(bug_mod, (5, 5))
+bug_mod = pygame.transform.rotozoom(bug_mod, 90, 1)
 
 class InputBox:
 
@@ -114,9 +120,11 @@ class Population:
         self.size += len(individuals) - 1 # update size of current population
     def draw_bugs(self):
         for individual in self.individuals:
-            screen.blit(individual.bug['image'], (individual.bug['x'], individual.bug['y']))
-            pygame.display.flip()
-            # time.sleep(5)
+            if individual.bug['_type'] == 'wt':
+                bug = bug_wt
+            else:
+                bug = bug_mod
+            screen.blit(bug, (individual.bug['x'], individual.bug['y']))
     # Begin mating process, run simulation
     def run(self):
         # Time to represent each generation in a visual simulation in seconds
@@ -147,10 +155,7 @@ class Individual:
         # if visualizing
     # create a bug visualization for this individual
     def create_bug(self, _type):
-        bug = pygame.image.load('{}.png'.format(_type)).convert_alpha()
-        bug = pygame.transform.smoothscale(bug, (50, 50))
-        bug = pygame.transform.rotozoom(bug, 90, 1)
-        self.bug['image'] = bug
+        self.bug['_type'] = _type
         # Algorithm to determine x and y here
         # We'll just put them in random positions within good margins of the screen
         # Avoiding the interface
@@ -204,25 +209,6 @@ class Individual:
             mate = None # check if this needs to be instantiated outside of while loop
             tries = 1
             clear = False
-            while mateless:
-                # get a random ID from the population
-                ID = randint(1, self.population.size - 1)
-                # make sure it fits constraints:
-                mate = self.population.individuals[ID]
-                # they are clear if it is legal to mate cross_generation or if they are in the same generation
-                if cross_generational_mating == False:
-                    if mate.generation == self.generation:
-                        clear = True
-                else:
-                    clear = True
-
-                if mate.num_matings <= multiple_matings and self.num_matings <= multiple_matings and mate.male is False and clear:
-                    # constraints are met! We can stop looking and actually mate
-                    mateless = False
-                tries +=1
-                if tries > 10:
-                    return # They lost their opportunity to mate
-            #2 & 3
             # create proper number of individuals based on inheritance probabilities
             children = []
             for i in range(1, num_offspring + 1):
@@ -232,37 +218,19 @@ class Individual:
                 else:
                     male = False
                 child = Individual(self.population.size + i, self.generation + 1, male, False, False, self.population)
-                if self.is_homozygous_modified() and mate.is_homozygous_modified():
+                # what are the counts of different genotypes in the population
+                # self.population.homozygous_modified
+                # self.population.homozygous_wt
+                # len(self.population.individuals)
+                if self.is_homozygous_modified():
                     child.make_homozygous_modified()
-                elif self.is_heterozygous() and mate.is_heterozygous():
-                    rand = randint(1, 4)
-                    if rand == 1:
+                if self.is_homozygous_wt():
+                    percent_modified = self.population.homozygous_modified / len(self.population.individuals)
+                    rand = randint(0, 100)
+                    if rand < percent_modified:
                         child.make_homozygous_modified()
-                    if rand == 2 or rand == 3:
-                        child.make_heterozygous()
                     else:
                         child.make_homozygous_wt()
-                elif self.is_homozygous_wt() and mate.is_homozygous_wt():
-                    child.make_homozygous_wt()
-                elif (self.is_homozygous_wt() and mate.is_homozygous_modified()) or (mate.is_homozygous_wt() and self.is_homozygous_modified()):
-                    child.make_heterozygous()
-                elif (self.is_heterozygous() and mate.is_homozygous_wt()) or (mate.is_heterozygous() and self.is_homozygous_wt()):
-                    rand = randint(1, 2)
-                    if rand == 1:
-                        child.make_heterozygous()
-                    else:
-                        child.make_homozygous_wt()
-                elif (self.is_heterozygous() and mate.is_homozygous_modified()) or (self.is_homozygous_modified() and mate.is_heterozygous()):
-                    rand = randint(1, 2)
-                    if rand == 1:
-                        child.make_heterozygous()
-                    else:
-                        child.make_homozygous_wt()
-                else:
-                    # apparently we missed something
-                    print('{}, {}'.format(self.chromosome_one, self.chromosome_two))
-                    print('{}, {}'.format(mate.chromosome_one, mate.chromosome_two))
-                    print("Apparently you missed something.")
                 children.append(child)
             #4
             self.population.add_individuals(children)
@@ -312,6 +280,19 @@ def simulation():
     mod_population_input = InputBox(30, 75, 200, 30)
     while not done:
         screen.fill((255, 255, 255))
+        # Simulation info
+        # instantiate info if it doesn't already exist
+        # this also denotes first run
+        try:
+            generation_num
+        except NameError:
+            generation_num = 0
+            wt_num = 0
+            mod_num = 0
+            population = None
+            pop_num = 1
+            drawn = False
+
         input_boxes = [wt_population_input, mod_population_input]
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -331,22 +312,11 @@ def simulation():
         button_height = 60
         pygame.draw.rect(screen, (0, 128, 255), pygame.Rect(button_x, button_y, button_width, button_height))
         font = pygame.font.SysFont("comicsansms", 26)
-        # Simulation info
-        # instantiate info if it doesn't already exist
-        try:
-            generation_num
-        except NameError:
-            generation_num = 0
-            wt_num = 0
-            mod_num = 0
-            population = None
-
         if population is not None:
             population.draw_bugs()
         generation = font.render("Generation: {}".format(generation_num), True, (0, 0, 0))
-        num_wt = font.render("% Wild-Type (red): {}".format(wt_num), True, (0, 0, 0))
-        num_mod = font.render("% Modified (blue): {}".format(mod_num), True, (0, 0, 0))
-        pygame.display.flip()
+        num_wt = font.render("Wild-Type (red): {}%".format(int(wt_num/pop_num*100)), True, (0, 0, 0))
+        num_mod = font.render("Modified (blue): {}%".format(int(mod_num/pop_num*100)), True, (0, 0, 0))
         # Start button text
         button = font.render("Start", True, (0, 0, 0))
         # Render everything
@@ -365,8 +335,9 @@ def simulation():
                 generation_num = results['generations']
                 wt_num = population.homozygous_wt
                 mod_num = population.homozygous_modified
-                pygame.display.flip()
-        pygame.display.flip()
+                pop_num = len(population.individuals)
+                # pygame.display.flip()
+        pygame.display.update()
         clock.tick(60)
         # main() # run main program
         # pygame.display.flip()
