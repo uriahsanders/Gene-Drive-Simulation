@@ -3,17 +3,19 @@ from random import randint
 import time
 import pygame
 pygame.init()
-screen = pygame.display.set_mode((1200, 600))
+screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+SCREEN_WIDTH, SCREEN_HEIGHT = pygame.display.get_surface().get_size()
+BUG_SIZE = 10
 # RULES (might modify at the individual level if the data supports this)
 multiple_matings = 0 # Can individuals mate more than once?
 num_offspring = 2 # How many offspring are created after every mating?
 cross_generational_mating = False # Can individuals mate with members of previous generations
 life_span = 1 # in generations
 generation_time = 5 # in seconds
-CRISPR_efficiency = 5 # in percent
+CRISPR_efficiency = 0.95 # in percent (almost always works)
 max_generation_life_span = 1 # how many generations can pass before an individual dies
 types = ['heterozygous', 'homozygous_wt', 'homozygous_modified']
-num_generations = 3
+num_generations = 6
 total_population = 0
 
 # Input box class, with help from https://stackoverflow.com/questions/46390231/how-to-create-a-text-input-box-with-pygame#
@@ -22,10 +24,10 @@ COLOR_ACTIVE = pygame.Color('dodgerblue2')
 FONT = pygame.font.Font(None, 32)
 
 bug_wt = pygame.image.load('wt2.png').convert_alpha()
-bug_wt = pygame.transform.smoothscale(bug_wt, (5, 5))
+bug_wt = pygame.transform.smoothscale(bug_wt, (BUG_SIZE, BUG_SIZE))
 bug_wt = pygame.transform.rotozoom(bug_wt, 90, 1)
 bug_mod = pygame.image.load('mod2.png').convert_alpha()
-bug_mod = pygame.transform.smoothscale(bug_mod, (5, 5))
+bug_mod = pygame.transform.smoothscale(bug_mod, (BUG_SIZE, BUG_SIZE))
 bug_mod = pygame.transform.rotozoom(bug_mod, 90, 1)
 
 class InputBox:
@@ -120,6 +122,9 @@ class Population:
         self.size += len(individuals) - 1 # update size of current population
     def draw_bugs(self):
         for individual in self.individuals:
+            # Don't draw dead bugs!
+            if individual.dead == True:
+                continue
             if individual.bug['_type'] == 'wt':
                 bug = bug_wt
             else:
@@ -134,10 +139,9 @@ class Population:
             for j in range(1, len(self.individuals)):
                 if self.individuals[j].male:
                     self.individuals[j].mate(i)
-            # time.sleep(generation_time) # wait the decided number of seconds for visual simulation of generations
 
 class Individual:
-    def __init__(self, ID=0, generation=1, male=True, chromosome_one=False, chromosome_two=False, population=None, num_matings=0, dead=False):
+    def __init__(self, ID=0, generation=1, male=True, chromosome_one=False, chromosome_two=False, population=None, num_matings=0, dead=False, num_offspring=0):
         self.id = ID
         self.population = population # what population is this individual a part of?
         # Pretend that every individual has 2 chromosomes since they are diploid and we
@@ -151,6 +155,7 @@ class Individual:
         self.generation = generation
         self.num_matings = num_matings
         self.dead = dead
+        self.num_offspring = num_offspring
         self.bug = {}
         # if visualizing
     # create a bug visualization for this individual
@@ -159,10 +164,8 @@ class Individual:
         # Algorithm to determine x and y here
         # We'll just put them in random positions within good margins of the screen
         # Avoiding the interface
-        self.bug['x'] = randint(10, 1150)
-        self.bug['y'] = randint(110, 550)
-        # screen.blit(bug, (x, y))
-        # pygame.display.flip()
+        self.bug['x'] = randint(BUG_SIZE*2, SCREEN_WIDTH-(BUG_SIZE*2))
+        self.bug['y'] = randint(120, SCREEN_HEIGHT-(BUG_SIZE*2))
 
     def is_heterozygous(self):
         return self.chromosome_one != self.chromosome_two
@@ -188,27 +191,8 @@ class Individual:
         self.create_bug('wt')
     # mate with another individual in the same population
     def mate(self, current_generation):
-        """
-        Important variables:
-        Can individuals mate more than once?
-        How much offspring is produced per mating period?
-        Can individuals mate with members of the previous generation?
-        # Let's solve these problems by making them all an option in RULES
-
-        1.Choose a random indi
-        vidual of the opposite sex,
-        with number_of_matings <= multiple_matings and generation = self.generation (if cross_generational_mating == False)
-        2.Combine chromosome values based on Punnet Square stuff
-        3.Create new individuals with above chromosome probabilities, generation = self.generation + 1
-        4.Add new individual to self.population
-        """
         # You can't mate if you're dead
         if not self.dead:
-            #1
-            mateless = True
-            mate = None # check if this needs to be instantiated outside of while loop
-            tries = 1
-            clear = False
             # create proper number of individuals based on inheritance probabilities
             children = []
             for i in range(1, num_offspring + 1):
@@ -232,13 +216,14 @@ class Individual:
                     else:
                         child.make_homozygous_wt()
                 children.append(child)
+                self.num_offspring += 1
             #4
             self.population.add_individuals(children)
             #update the status of this individual to have mated
             self.num_matings += 1
-            # check how many generations currently exist
-            # if greater than certain amount they are old so parent dies
-            if current_generation - self.generation > max_generation_life_span:
+            # If they have mated too much or had too many offspring kill them
+            # Average offspring count is 150 over lifetime
+            if self.num_offspring > 150:
                 self.dead = True
                 self.population.dead +=1
 
@@ -269,9 +254,6 @@ def main(wild_type_pop_size=None, modified_pop_size=None):
         'population': population,
     }
 
-# main()
-
-
 # Start visualization code
 def simulation():
     clock = pygame.time.Clock()
@@ -297,6 +279,9 @@ def simulation():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 done = True
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    done = True
             for box in input_boxes:
                 box.handle_event(event)
         for box in input_boxes:
@@ -336,10 +321,7 @@ def simulation():
                 wt_num = population.homozygous_wt
                 mod_num = population.homozygous_modified
                 pop_num = len(population.individuals)
-                # pygame.display.flip()
         pygame.display.update()
         clock.tick(60)
-        # main() # run main program
-        # pygame.display.flip()
 
 simulation()
